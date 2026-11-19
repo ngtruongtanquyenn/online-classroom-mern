@@ -49,7 +49,7 @@ export default function Register() {
               value={formData.fullName}
               onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="Nguyễn Văn A"
+              placeholder="Nhập tên người dùng"
             />
           </div>
           <div>
@@ -60,7 +60,7 @@ export default function Register() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="student@university.edu.vn"
+              placeholder="user@classroom.com"
             />
           </div>
           <div>

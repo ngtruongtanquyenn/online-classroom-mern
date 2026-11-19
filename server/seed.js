@@ -7,18 +7,14 @@ await connectDB();
 
 const seedAdmin = async () => {
   try {
-    const adminExists = await User.findOne({ email: 'admin@classroom.com' });
-    if (!adminExists) {
-      await User.create({
-        fullName: 'Quản Trị Viên Hệ Thống',
-        email: 'admin@classroom.com',
-        password: 'password123',
-        role: 'admin',
-      });
-      console.log('Đã tạo tài khoản Admin: admin@classroom.com / password123');
-    } else {
-      console.log('Tài khoản Admin đã tồn tại.');
-    }
+    await User.deleteOne({ email: 'admin@classroom.com' });
+    await User.create({
+      fullName: 'Quản Trị Viên Hệ Thống',
+      email: 'admin@classroom.com',
+      password: 'password123',
+      role: 'admin',
+    });
+    console.log('Đã tạo thành công: admin@classroom.com / password123');
     process.exit();
   } catch (error) {
     console.error(error);
