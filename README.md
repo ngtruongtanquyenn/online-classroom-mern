@@ -113,9 +113,9 @@ Bảo mật dữ liệu nhạy cảm: Mật khẩu người dùng được băm 
 Tài khoản kiểm thử (Demo Accounts)
 (Dữ liệu đã được đồng bộ sẵn trên MongoDB Atlas để phục vụ kiểm thử các vai trò)
 Vai trò (Role)          Email đăng nhập         Mật khẩu
-Admin                   admin@gmail.com         123456789
-Teacher                 teacher@gmail.com       123456789
-Student                 student@gmail.com       123456789
+Admin                   admin@classroom.com     123456789
+Teacher                 teacher@classroom.com   123456789
+Student                 student@classroom.com   123456789
 Đóng góp & Bản quyền
 Dự án được xây dựng và hoàn thiện bởi các thành viên trong nhóm:
 Nguyễn Trường Tấn Quyền
