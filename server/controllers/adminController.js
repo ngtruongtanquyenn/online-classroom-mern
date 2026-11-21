@@ -68,3 +68,29 @@ export const getAllCoursesAdmin = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Xóa người dùng
+// @route   DELETE /api/admin/users/:id
+// @access  Private/Admin
+export const deleteUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      res.status(404);
+      throw new Error('Không tìm thấy người dùng');
+    }
+
+    if (user.role === 'admin') {
+      res.status(400);
+      throw new Error('Không thể xóa tài khoản Quản trị viên');
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+    // (Tùy chọn) Xóa luôn các khóa học nếu người dùng là giảng viên:
+    // await Course.deleteMany({ teacher: req.params.id });
+
+    res.json({ message: 'Đã xóa người dùng thành công' });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -26,6 +26,16 @@ export default function AdminDashboard() {
     fetchData();
   };
 
+  const handleDeleteUser = async (userId, fullName) => {
+    if (!window.confirm(`Admin xác nhận xóa tài khoản "${fullName}"?`)) return;
+    try {
+      await axiosClient.delete(`/admin/users/${userId}`);
+      fetchData();
+    } catch (error) {
+      alert(error.response?.data?.message || 'Lỗi khi xóa tài khoản');
+    }
+  };
+
   const handleDeleteCourse = async (courseId) => {
     if (!window.confirm('Admin xác nhận xóa khóa học này?')) return;
     await axiosClient.delete(`/courses/${courseId}`);
@@ -85,14 +95,22 @@ export default function AdminDashboard() {
                   </td>
                   <td className="p-4">
                     {u.role !== 'admin' && (
-                      <button
-                        onClick={() => handleToggleUser(u._id)}
-                        className={`px-3 py-1 rounded text-xs text-white cursor-pointer ${
-                          u.isActive ? 'bg-rose-500' : 'bg-emerald-600'
-                        }`}
-                      >
-                        {u.isActive ? 'Khóa tài khoản' : 'Mở khóa'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleUser(u._id)}
+                          className={`px-3 py-1 rounded text-xs text-white cursor-pointer ${
+                            u.isActive ? 'bg-rose-500' : 'bg-emerald-600'
+                          }`}
+                        >
+                          {u.isActive ? 'Khóa tài khoản' : 'Mở khóa'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u._id, u.fullName)}
+                          className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1 rounded text-xs cursor-pointer"
+                        >
+                          Xóa
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
