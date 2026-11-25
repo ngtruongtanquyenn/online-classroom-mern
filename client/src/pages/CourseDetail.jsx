@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Video, BookOpen, CheckCircle, Users } from 'lucide-react';
+import { FileText, Video, BookOpen, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 
 export default function CourseDetail() {
   const { id } = useParams();
@@ -21,6 +21,16 @@ export default function CourseDetail() {
   });
   const [matFile, setMatFile] = useState(null);
 
+  // State chỉnh sửa tài liệu (Teacher)
+  const [editingMatId, setEditingMatId] = useState(null);
+  const [editMatForm, setEditMatForm] = useState({
+    title: '',
+    type: 'pdf',
+    videoUrl: '',
+    content: '',
+  });
+  const [editMatFile, setEditMatFile] = useState(null);
+
   // State form tạo bài tập (Teacher)
   const [assignForm, setAssignForm] = useState({
     title: '',
@@ -32,7 +42,15 @@ export default function CourseDetail() {
   const [submitText, setSubmitText] = useState({});
   const [submitFile, setSubmitFile] = useState({});
 
-  const isTeacherOwner = user?.role === 'teacher' && course?.teacher?._id === user?._id;
+  const isTeacherOwner =
+    (user?.role === 'teacher' && course?.teacher?._id === user?._id) ||
+    user?.role === 'admin';
+
+  // Hàm chuẩn hóa URL file (hỗ trợ cả link Cloudinary https:// và link /uploads cũ)
+  const getFileUrl = (url) => {
+    if (!url) return '#';
+    return url.startsWith('http') ? url : `http://localhost:5000${url}`;
+  };
 
   const loadData = async () => {
     const [courseRes, assignRes] = await Promise.all([
@@ -65,6 +83,41 @@ export default function CourseDetail() {
     await axiosClient.post(`/courses/${id}/materials`, formData);
     setMatForm({ title: '', type: 'pdf', videoUrl: '', content: '' });
     setMatFile(null);
+    loadData();
+  };
+
+  // Teacher: Bật chế độ sửa tài liệu
+  const startEditMaterial = (material) => {
+    setEditingMatId(material._id);
+    setEditMatForm({
+      title: material.title || '',
+      type: material.type || 'pdf',
+      videoUrl: material.videoUrl || '',
+      content: material.content || '',
+    });
+    setEditMatFile(null);
+  };
+
+  // Teacher: Lưu cập nhật tài liệu
+  const handleUpdateMaterial = async (e, materialId) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('title', editMatForm.title);
+    formData.append('type', editMatForm.type);
+    if (editMatForm.type === 'video') formData.append('videoUrl', editMatForm.videoUrl);
+    if (editMatForm.type === 'reading') formData.append('content', editMatForm.content);
+    if (editMatForm.type === 'pdf' && editMatFile) formData.append('file', editMatFile);
+
+    await axiosClient.put(`/courses/${id}/materials/${materialId}`, formData);
+    setEditingMatId(null);
+    setEditMatFile(null);
+    loadData();
+  };
+
+  // Teacher: Xóa tài liệu
+  const handleDeleteMaterial = async (materialId, title) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa tài liệu "${title}"?`)) return;
+    await axiosClient.delete(`/courses/${id}/materials/${materialId}`);
     loadData();
   };
 
@@ -109,6 +162,9 @@ export default function CourseDetail() {
 
   if (!course) return <div className="p-8 text-center">Đang tải dữ liệu...</div>;
 
+  // Lọc bỏ các bản ghi mồ côi nếu user đã bị xóa
+  const validStudents = students.filter((en) => en.student !== null);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="bg-white p-6 rounded-xl shadow-sm border mb-6">
@@ -144,7 +200,7 @@ export default function CourseDetail() {
         >
           Bài tập ({assignments.length})
         </button>
-        {(isTeacherOwner || user?.role === 'admin') && (
+        {isTeacherOwner && (
           <button
             onClick={() => setActiveTab('students')}
             className={`px-4 py-2 font-medium cursor-pointer ${
@@ -153,7 +209,7 @@ export default function CourseDetail() {
                 : 'text-slate-600'
             }`}
           >
-            Sinh viên ghi danh ({students.length})
+            Sinh viên ghi danh ({validStudents.length})
           </button>
         )}
       </div>
@@ -227,54 +283,160 @@ export default function CourseDetail() {
 
           <div className="space-y-3">
             {course.materials.map((m) => (
-              <div
-                key={m._id}
-                className="bg-white p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
-              >
-                <div className="flex items-start gap-3">
-                  {m.type === 'pdf' && <FileText className="w-5 h-5 text-rose-500 mt-1" />}
-                  {m.type === 'video' && <Video className="w-5 h-5 text-blue-500 mt-1" />}
-                  {m.type === 'reading' && (
-                    <BookOpen className="w-5 h-5 text-emerald-500 mt-1" />
-                  )}
-                  <div>
-                    <h4 className="font-bold text-slate-800">{m.title}</h4>
-                    {m.type === 'pdf' && m.fileUrl && (
-                      <a
-                        href={`http://localhost:5000${m.fileUrl}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-indigo-600 hover:underline"
-                      >
-                        Tải xuống / Xem tài liệu PDF
-                      </a>
-                    )}
-                    {m.type === 'video' && (
-                      <a
-                        href={m.videoUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-indigo-600 hover:underline"
-                      >
-                        Mở liên kết Video bài giảng
-                      </a>
-                    )}
-                    {m.type === 'reading' && (
-                      <p className="text-sm text-slate-600 mt-1 whitespace-pre-line">
-                        {m.content}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {user?.role === 'student' && (
-                  <button
-                    onClick={() => handleCompleteMaterial(m._id)}
-                    className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg font-medium cursor-pointer"
+              <div key={m._id} className="bg-white p-4 rounded-xl border">
+                {editingMatId === m._id ? (
+                  <form
+                    onSubmit={(e) => handleUpdateMaterial(e, m._id)}
+                    className="space-y-3 bg-slate-50 p-4 rounded-lg"
                   >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Đánh dấu đã học</span>
-                  </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        required
+                        value={editMatForm.title}
+                        onChange={(e) =>
+                          setEditMatForm({ ...editMatForm, title: e.target.value })
+                        }
+                        className="px-3 py-2 border rounded-lg bg-white text-sm"
+                      />
+                      <select
+                        value={editMatForm.type}
+                        onChange={(e) =>
+                          setEditMatForm({ ...editMatForm, type: e.target.value })
+                        }
+                        className="px-3 py-2 border rounded-lg bg-white text-sm"
+                      >
+                        <option value="pdf">Tệp PDF / Tài liệu</option>
+                        <option value="video">Link Video bài giảng</option>
+                        <option value="reading">Bài đọc trực tiếp</option>
+                      </select>
+                    </div>
+
+                    {editMatForm.type === 'pdf' && (
+                      <div>
+                        <p className="text-xs text-slate-500 mb-1">
+                          Chọn tệp mới nếu muốn thay thế tệp hiện tại:
+                        </p>
+                        <input
+                          type="file"
+                          onChange={(e) => setEditMatFile(e.target.files[0])}
+                          className="block text-sm"
+                        />
+                      </div>
+                    )}
+                    {editMatForm.type === 'video' && (
+                      <input
+                        type="url"
+                        required
+                        value={editMatForm.videoUrl}
+                        onChange={(e) =>
+                          setEditMatForm({ ...editMatForm, videoUrl: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border rounded-lg bg-white text-sm"
+                      />
+                    )}
+                    {editMatForm.type === 'reading' && (
+                      <textarea
+                        required
+                        rows={3}
+                        value={editMatForm.content}
+                        onChange={(e) =>
+                          setEditMatForm({ ...editMatForm, content: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border rounded-lg bg-white text-sm"
+                      />
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                      >
+                        Lưu thay đổi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMatId(null)}
+                        className="bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-start gap-3">
+                      {m.type === 'pdf' && (
+                        <FileText className="w-5 h-5 text-rose-500 mt-1" />
+                      )}
+                      {m.type === 'video' && (
+                        <Video className="w-5 h-5 text-blue-500 mt-1" />
+                      )}
+                      {m.type === 'reading' && (
+                        <BookOpen className="w-5 h-5 text-emerald-500 mt-1" />
+                      )}
+                      <div>
+                        <h4 className="font-bold text-slate-800">{m.title}</h4>
+                        {m.type === 'pdf' && m.fileUrl && (
+                          <a
+                            href={getFileUrl(m.fileUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="text-sm text-indigo-600 hover:underline"
+                          >
+                            Tải xuống / Xem tài liệu
+                          </a>
+                        )}
+                        {m.type === 'video' && (
+                          <a
+                            href={m.videoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm text-indigo-600 hover:underline"
+                          >
+                            Mở liên kết Video bài giảng
+                          </a>
+                        )}
+                        {m.type === 'reading' && (
+                          <p className="text-sm text-slate-600 mt-1 whitespace-pre-line">
+                            {m.content}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {user?.role === 'student' && (
+                        <button
+                          onClick={() => handleCompleteMaterial(m._id)}
+                          className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg font-medium cursor-pointer"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Đánh dấu đã học</span>
+                        </button>
+                      )}
+
+                      {isTeacherOwner && (
+                        <>
+                          <button
+                            onClick={() => startEditMaterial(m)}
+                            className="flex items-center gap-1 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 px-3 py-1.5 rounded-lg font-medium cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Sửa</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMaterial(m._id, m.title)}
+                            className="flex items-center gap-1 text-xs bg-rose-50 text-rose-700 hover:bg-rose-100 px-3 py-1.5 rounded-lg font-medium cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Xóa</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             ))}
@@ -333,6 +495,8 @@ export default function CourseDetail() {
             const mySub = assign.submissions?.find(
               (s) => s.student?._id === user?._id
             );
+            const validSubmissions =
+              assign.submissions?.filter((sub) => sub.student !== null) || [];
 
             return (
               <div key={assign._id} className="bg-white p-6 rounded-xl border space-y-4">
@@ -395,10 +559,10 @@ export default function CourseDetail() {
                 {isTeacherOwner && (
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-bold text-slate-700 mb-2">
-                      Danh sách bài nộp ({assign.submissions?.length || 0})
+                      Danh sách bài nộp ({validSubmissions.length})
                     </h4>
                     <div className="space-y-2">
-                      {assign.submissions?.map((sub) => (
+                      {validSubmissions.map((sub) => (
                         <div
                           key={sub._id}
                           className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-3 rounded-lg text-sm gap-2"
@@ -410,12 +574,13 @@ export default function CourseDetail() {
                             )}
                             {sub.fileUrl && (
                               <a
-                                href={`http://localhost:5000${sub.fileUrl}`}
+                                href={getFileUrl(sub.fileUrl)}
                                 target="_blank"
-                                rel="noreferrer"
+                                rel="noopener noreferrer"
+                                download
                                 className="text-indigo-600 underline"
                               >
-                                Xem file đính kèm
+                                Xem / Tải file đính kèm
                               </a>
                             )}
                           </div>
@@ -453,7 +618,7 @@ export default function CourseDetail() {
               </tr>
             </thead>
             <tbody>
-              {students.map((en) => (
+              {validStudents.map((en) => (
                 <tr key={en._id} className="border-b">
                   <td className="p-4 font-medium">{en.student?.fullName}</td>
                   <td className="p-4 text-slate-600">{en.student?.email}</td>

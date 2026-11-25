@@ -1,19 +1,31 @@
 import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import path from 'path';
-import fs from 'fs';
+import dotenv from 'dotenv';
 
-const uploadDir = 'uploads/';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+dotenv.config();
 
-const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename(req, file, cb) {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const originalName = path
+      .parse(file.originalname)
+      .name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const ext = path.extname(file.originalname).replace('.', '').toLowerCase();
+
+    return {
+      folder: 'online-classroom-materials',
+      resource_type: 'auto', // Hỗ trợ đầy đủ file tài liệu (pdf, docx, zip...) và ảnh
+      public_id: `${file.fieldname}-${Date.now()}-${originalName}`,
+      format: ext || undefined,
+    };
   },
 });
 
@@ -26,6 +38,8 @@ const fileFilter = (req, file, cb) => {
     cb(new Error('Chỉ hỗ trợ định dạng: PDF, DOC, DOCX, ZIP, RAR, PNG, JPG'));
   }
 };
+
+export { cloudinary };
 
 export const upload = multer({
   storage,
