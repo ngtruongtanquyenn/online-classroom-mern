@@ -69,7 +69,8 @@ Hệ thống được thiết kế để hướng tới việc số hóa toàn d
 git clone [https://github.com/ngtruongtanquyenn/online-classroom-mern.git](https://github.com/ngtruongtanquyenn/online-classroom-mern.git)
 cd online-classroom-mern
 2. Cài đặt thư viện
-Cài đặt các gói phụ thuộc cho cả hai thư mục server và client:Bashnpm --prefix server install
+Cài đặt các gói phụ thuộc cho cả hai thư mục server và client: Bash
+npm --prefix server install
 npm --prefix client install
 3. Cấu hình biến môi trường
 Tạo file .env bên trong thư mục server/ (dựa trên file mẫu server/.env.example) với nội dung sau:Đoạn mãPORT=5000
