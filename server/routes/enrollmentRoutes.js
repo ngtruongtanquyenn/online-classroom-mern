@@ -4,6 +4,7 @@ import {
   getMyEnrollments,
   markMaterialComplete,
   getCourseStudents,
+  removeStudentFromCourse,
 } from '../controllers/enrollmentController.js';
 import { protect, authorize } from '../middlewares/authMiddleware.js';
 
@@ -22,6 +23,14 @@ router.get(
   protect,
   authorize('teacher', 'admin'),
   getCourseStudents
+);
+
+// Xóa học viên khỏi khóa học (Teacher hoặc Admin)
+router.delete(
+  '/:enrollmentId',
+  protect,
+  authorize('teacher', 'admin'),
+  removeStudentFromCourse
 );
 
 export default router;

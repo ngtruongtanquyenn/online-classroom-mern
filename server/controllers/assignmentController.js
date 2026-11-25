@@ -56,7 +56,7 @@ export const submitAssignment = async (req, res, next) => {
     }
 
     const { textAnswer } = req.body;
-    const fileUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+    const fileUrl = req.file ? req.file.path : undefined;
 
     if (!textAnswer && !fileUrl) {
       res.status(400);
@@ -114,6 +114,73 @@ export const gradeSubmission = async (req, res, next) => {
 
     await assignment.save();
     res.json({ message: 'Đã lưu điểm thành công', submission });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Cập nhật thông tin bài tập (Teacher sở hữu khóa học hoặc Admin)
+// @route   PUT /api/assignments/:id
+export const updateAssignment = async (req, res, next) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) {
+      res.status(404);
+      throw new Error('Không tìm thấy bài tập');
+    }
+
+    const course = await Course.findById(assignment.course);
+    if (!course) {
+      res.status(404);
+      throw new Error('Không tìm thấy khóa học');
+    }
+
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
+      res.status(403);
+      throw new Error('Bạn không có quyền chỉnh sửa bài tập này');
+    }
+
+    const { title, description, dueDate } = req.body;
+    if (title !== undefined) assignment.title = title;
+    if (description !== undefined) assignment.description = description;
+    if (dueDate !== undefined) assignment.dueDate = dueDate;
+
+    const updated = await assignment.save();
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Xóa bài tập (Teacher sở hữu khóa học hoặc Admin)
+// @route   DELETE /api/assignments/:id
+export const deleteAssignment = async (req, res, next) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) {
+      res.status(404);
+      throw new Error('Không tìm thấy bài tập');
+    }
+
+    const course = await Course.findById(assignment.course);
+    if (!course) {
+      res.status(404);
+      throw new Error('Không tìm thấy khóa học');
+    }
+
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
+      res.status(403);
+      throw new Error('Bạn không có quyền xóa bài tập này');
+    }
+
+    await assignment.deleteOne();
+    res.json({ message: 'Đã xóa bài tập thành công' });
   } catch (error) {
     next(error);
   }

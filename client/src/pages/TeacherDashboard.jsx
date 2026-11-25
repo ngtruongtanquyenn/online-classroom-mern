@@ -1,10 +1,29 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-import { Plus, Trash2, FolderOpen } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import {
+  Plus,
+  Trash2,
+  FolderOpen,
+  BookOpen,
+  Layers,
+  GraduationCap,
+} from 'lucide-react';
+
+const PRESET_CATEGORIES = [
+  'Lập trình Web',
+  'Cơ sở dữ liệu',
+  'Trí tuệ nhân tạo',
+  'Kỹ thuật phần mềm',
+  'Công nghệ thông tin',
+];
 
 export default function TeacherDashboard() {
   const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const { user } = useAuth();
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -12,8 +31,12 @@ export default function TeacherDashboard() {
   });
 
   const fetchMyCourses = async () => {
-    const { data } = await axiosClient.get('/courses/my-courses');
-    setCourses(data);
+    try {
+      const { data } = await axiosClient.get('/courses/my-courses');
+      setCourses(data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -22,9 +45,14 @@ export default function TeacherDashboard() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    await axiosClient.post('/courses', form);
-    setForm({ title: '', description: '', category: 'Lập trình Web' });
-    fetchMyCourses();
+    setCreating(true);
+    try {
+      await axiosClient.post('/courses', form);
+      setForm({ title: '', description: '', category: 'Lập trình Web' });
+      fetchMyCourses();
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -33,91 +61,183 @@ export default function TeacherDashboard() {
     fetchMyCourses();
   };
 
+  const totalMaterials = courses.reduce(
+    (sum, c) => sum + (c.materials?.length || 0),
+    0
+  );
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Form tạo khóa học */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border h-fit">
-        <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <Plus className="w-5 h-5 text-indigo-600" />
-          <span>Tạo Khóa học mới</span>
-        </h2>
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Tên khóa học</label>
-            <input
-              type="text"
-              required
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-              placeholder="VD: Lập trình MERN Stack từ A-Z"
-            />
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-indigo-700 via-blue-700 to-cyan-700 rounded-2xl p-6 sm:p-8 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <p className="text-cyan-200 text-xs font-semibold uppercase tracking-wider">
+            Không gian Giảng viên
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold mt-1">
+            Xin chào, {user?.fullName}
+          </h1>
+          <p className="text-blue-100 text-sm mt-1.5">
+            Khởi tạo lớp học, đăng tải bài giảng và theo dõi kết quả học tập của sinh viên.
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <div className="bg-white/15 backdrop-blur-sm border border-white/15 rounded-xl px-4 py-3 text-center min-w-[110px]">
+            <p className="text-2xl font-extrabold">{courses.length}</p>
+            <p className="text-xs text-blue-100">Lớp giảng dạy</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Danh mục</label>
-            <input
-              type="text"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-            />
+          <div className="bg-white/15 backdrop-blur-sm border border-white/15 rounded-xl px-4 py-3 text-center min-w-[110px]">
+            <p className="text-2xl font-extrabold">{totalMaterials}</p>
+            <p className="text-xs text-blue-100">Tổng học liệu</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Mô tả khóa học</label>
-            <textarea
-              required
-              rows={3}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg"
-              placeholder="Nội dung tổng quan của môn học..."
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg cursor-pointer"
-          >
-            Tạo lớp học
-          </button>
-        </form>
+        </div>
       </div>
 
-      {/* Danh sách khóa học của giảng viên */}
-      <div className="lg:col-span-2 space-y-4">
-        <h2 className="text-xl font-bold text-slate-800">
-          Lớp học tôi giảng dạy ({courses.length})
-        </h2>
-        {courses.map((course) => (
-          <div
-            key={course._id}
-            className="bg-white p-5 rounded-xl shadow-sm border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-          >
-            <div>
-              <span className="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-0.5 rounded-full font-medium">
-                {course.category}
-              </span>
-              <h3 className="text-lg font-bold text-slate-800 mt-1">{course.title}</h3>
-              <p className="text-sm text-slate-500">
-                Số tài liệu: {course.materials?.length || 0}
-              </p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* Form tạo khóa học */}
+        <div className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/90 lg:sticky lg:top-24">
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Plus className="w-5 h-5" />
             </div>
-            <div className="flex gap-2">
-              <Link
-                to={`/courses/${course._id}`}
-                className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm"
-              >
-                <FolderOpen className="w-4 h-4" />
-                <span>Quản lý lớp</span>
-              </Link>
-              <button
-                onClick={() => handleDelete(course._id)}
-                className="flex items-center gap-1 bg-rose-500 hover:bg-rose-600 text-white px-3 py-2 rounded-lg text-sm cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Tạo khóa học mới</h2>
+              <p className="text-xs text-slate-500">Mở lớp học trực tuyến mới</p>
             </div>
           </div>
-        ))}
+
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Tên khóa học
+              </label>
+              <input
+                type="text"
+                required
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
+                placeholder="VD: Lập trình MERN Stack từ A-Z"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Danh mục
+              </label>
+              <input
+                type="text"
+                list="preset-categories"
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
+              />
+              <datalist id="preset-categories">
+                {PRESET_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat} />
+                ))}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Mô tả khóa học
+              </label>
+              <textarea
+                required
+                rows={4}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition"
+                placeholder="Nội dung tổng quan, mục tiêu của môn học..."
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={creating}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl shadow-sm transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{creating ? 'Đang tạo...' : 'Tạo lớp học'}</span>
+            </button>
+          </form>
+        </div>
+
+        {/* Danh sách khóa học của giảng viên */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900">
+              Lớp học tôi giảng dạy ({courses.length})
+            </h2>
+          </div>
+
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 animate-pulse space-y-3">
+                  <div className="h-4 bg-slate-200 rounded w-24" />
+                  <div className="h-5 bg-slate-200 rounded w-2/3" />
+                  <div className="h-4 bg-slate-100 rounded w-1/3" />
+                </div>
+              ))}
+            </div>
+          ) : courses.length === 0 ? (
+            <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+                <GraduationCap className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800">Chưa có lớp học nào</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Sử dụng biểu mẫu bên cạnh để tạo khóa học đầu tiên của bạn.
+              </p>
+            </div>
+          ) : (
+            courses.map((course) => (
+              <div
+                key={course._id}
+                className="bg-white p-6 rounded-2xl shadow-xs border border-slate-200/90 hover:border-indigo-200 hover:shadow-md transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+              >
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-0.5 rounded-full font-semibold">
+                      {course.category}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                      <Layers className="w-3.5 h-3.5 text-slate-400" />
+                      {course.materials?.length || 0} tài liệu
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-slate-900 truncate">
+                    {course.title}
+                  </h3>
+                  <p className="text-sm text-slate-500 line-clamp-2">
+                    {course.description}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                  <Link
+                    to={`/courses/${course._id}`}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition"
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    <span>Quản lý lớp</span>
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(course._id)}
+                    title="Xóa khóa học"
+                    className="flex items-center justify-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 px-3 py-2 rounded-xl text-sm font-medium transition cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

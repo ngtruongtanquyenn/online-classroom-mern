@@ -82,7 +82,10 @@ export const updateCourse = async (req, res, next) => {
       throw new Error('Không tìm thấy khóa học');
     }
 
-    if (course.teacher.toString() !== req.user._id.toString()) {
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
       res.status(403);
       throw new Error('Bạn không có quyền chỉnh sửa khóa học này');
     }
@@ -126,7 +129,7 @@ export const deleteCourse = async (req, res, next) => {
   }
 };
 
-// @desc    Đăng tải tài liệu vào khóa học (PDF, Video link, Bài đọc)
+// @desc    Đăng tải tài liệu vào khóa học (Cloudinary URL, Video link, Bài đọc)
 // @route   POST /api/courses/:id/materials
 export const addMaterial = async (req, res, next) => {
   try {
@@ -136,13 +139,16 @@ export const addMaterial = async (req, res, next) => {
       throw new Error('Không tìm thấy khóa học');
     }
 
-    if (course.teacher.toString() !== req.user._id.toString()) {
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
       res.status(403);
       throw new Error('Không có quyền thêm tài liệu');
     }
 
     const { title, type, videoUrl, content } = req.body;
-    const fileUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+    const fileUrl = req.file ? req.file.path : undefined;
 
     course.materials.push({
       title,
@@ -159,6 +165,46 @@ export const addMaterial = async (req, res, next) => {
   }
 };
 
+// @desc    Cập nhật tài liệu trong khóa học
+// @route   PUT /api/courses/:id/materials/:materialId
+export const updateMaterial = async (req, res, next) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      res.status(404);
+      throw new Error('Không tìm thấy khóa học');
+    }
+
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
+      res.status(403);
+      throw new Error('Không có quyền chỉnh sửa tài liệu');
+    }
+
+    const material = course.materials.id(req.params.materialId);
+    if (!material) {
+      res.status(404);
+      throw new Error('Không tìm thấy tài liệu');
+    }
+
+    const { title, type, videoUrl, content } = req.body;
+    if (title !== undefined) material.title = title;
+    if (type !== undefined) material.type = type;
+    if (videoUrl !== undefined) material.videoUrl = videoUrl;
+    if (content !== undefined) material.content = content;
+    if (req.file) {
+      material.fileUrl = req.file.path;
+    }
+
+    await course.save();
+    res.json(course.materials);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Xóa tài liệu khỏi khóa học
 // @route   DELETE /api/courses/:id/materials/:materialId
 export const deleteMaterial = async (req, res, next) => {
@@ -169,7 +215,10 @@ export const deleteMaterial = async (req, res, next) => {
       throw new Error('Không tìm thấy khóa học');
     }
 
-    if (course.teacher.toString() !== req.user._id.toString()) {
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
       res.status(403);
       throw new Error('Không có quyền xóa tài liệu');
     }

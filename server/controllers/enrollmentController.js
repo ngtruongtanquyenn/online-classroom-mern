@@ -1,5 +1,6 @@
 import Enrollment from '../models/Enrollment.js';
 import Course from '../models/Course.js';
+import Assignment from '../models/Assignment.js';
 
 // @desc    Sinh viên ghi danh vào khóa học
 // @route   POST /api/enrollments/:courseId
@@ -107,6 +108,46 @@ export const getCourseStudents = async (req, res, next) => {
       .sort('-createdAt');
 
     res.json(enrollments);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Xóa học viên khỏi khóa học (Giảng viên phụ trách hoặc Admin)
+// @route   DELETE /api/enrollments/:enrollmentId
+export const removeStudentFromCourse = async (req, res, next) => {
+  try {
+    const enrollment = await Enrollment.findById(req.params.enrollmentId);
+    if (!enrollment) {
+      res.status(404);
+      throw new Error('Không tìm thấy thông tin ghi danh của học viên');
+    }
+
+    const course = await Course.findById(enrollment.course);
+    if (!course) {
+      res.status(404);
+      throw new Error('Không tìm thấy khóa học');
+    }
+
+    // Kiểm tra quyền: Chỉ Admin hoặc Giảng viên tạo khóa học mới được xóa
+    const isTeacherOwner = course.teacher.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isTeacherOwner && !isAdmin) {
+      res.status(403);
+      throw new Error('Bạn không có quyền xóa học viên khỏi khóa học này');
+    }
+
+    // 1. Dọn dẹp luôn bài nộp của học viên này trong các bài tập của khóa học (tránh rác dữ liệu)
+    await Assignment.updateMany(
+      { course: course._id },
+      { $pull: { submissions: { student: enrollment.student } } }
+    );
+
+    // 2. Xóa bản ghi ghi danh
+    await enrollment.deleteOne();
+
+    res.json({ message: 'Đã xóa học viên khỏi khóa học thành công' });
   } catch (error) {
     next(error);
   }
