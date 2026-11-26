@@ -72,6 +72,7 @@ cd online-classroom-mern
 Cài đặt các gói phụ thuộc cho cả hai thư mục server và client: Bash
 npm --prefix server install
 npm --prefix client install
+npm install cloudinary multer-storage-cloudinary
 3. Cấu hình biến môi trường
 Tạo file .env bên trong thư mục server/ (dựa trên file mẫu server/.env.example) với nội dung sau:Đoạn mãPORT=5000
 MONGO_URI=mongodb+srv://<username>:<password>@cluster0.hfa97fo.mongodb.net/online_classroom?retryWrites=true&w=majority
