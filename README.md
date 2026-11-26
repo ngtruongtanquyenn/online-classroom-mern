@@ -95,12 +95,18 @@ cd online-classroom-mern
 npm install
 npm --prefix server install
 npm --prefix client install
+<<<<<<< HEAD
 ```
 
 ### 3. Cấu hình biến môi trường
 Tạo file `.env` bên trong thư mục `server/` (tham khảo `server/.env.example`):
 ```env
 PORT=5000
+=======
+npm install cloudinary multer-storage-cloudinary
+3. Cấu hình biến môi trường
+Tạo file .env bên trong thư mục server/ (dựa trên file mẫu server/.env.example) với nội dung sau:Đoạn mãPORT=5000
+>>>>>>> 93507e4a1f7c065d4292e11c8900672c92b6ce37
 MONGO_URI=mongodb+srv://<username>:<password>@cluster0.hfa97fo.mongodb.net/online_classroom?retryWrites=true&w=majority
 JWT_SECRET=thay_bang_chuoi_bi_mat_ngau_nhien
 JWT_EXPIRE=7d
