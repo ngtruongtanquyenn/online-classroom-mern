@@ -1,5 +1,8 @@
 import Course from '../models/Course.js';
 import Enrollment from '../models/Enrollment.js';
+import Assignment from '../models/Assignment.js';
+import Quiz from '../models/Quiz.js';
+import Announcement from '../models/Announcement.js';
 
 // @desc    Lấy danh sách tất cả khóa học đang mở
 // @route   GET /api/courses
@@ -16,11 +19,18 @@ export const getAllCourses = async (req, res, next) => {
     }
 
     const courses = await Course.find(query)
-      .populate('teacher', 'fullName email')
+      .populate('teacher', 'fullName email avatar')
       .select('-materials.content')
       .sort('-createdAt');
 
-    res.json(courses);
+    const sanitized = courses.map((course) => {
+      const obj = course.toObject();
+      obj.hasClassCode = Boolean(obj.classCode);
+      delete obj.classCode;
+      return obj;
+    });
+
+    res.json(sanitized);
   } catch (error) {
     next(error);
   }
@@ -43,13 +53,24 @@ export const getCourseById = async (req, res, next) => {
   try {
     const course = await Course.findById(req.params.id).populate(
       'teacher',
-      'fullName email'
+      'fullName email avatar'
     );
     if (!course) {
       res.status(404);
       throw new Error('Không tìm thấy khóa học');
     }
-    res.json(course);
+
+    const obj = course.toObject();
+    const isPrivileged =
+      req.user.role === 'admin' ||
+      course.teacher?._id?.toString() === req.user._id.toString();
+
+    obj.hasClassCode = Boolean(obj.classCode);
+    if (!isPrivileged) {
+      delete obj.classCode;
+    }
+
+    res.json(obj);
   } catch (error) {
     next(error);
   }
@@ -59,11 +80,13 @@ export const getCourseById = async (req, res, next) => {
 // @route   POST /api/courses
 export const createCourse = async (req, res, next) => {
   try {
-    const { title, description, category } = req.body;
+    const { title, description, category, classCode, isPublished } = req.body;
     const course = await Course.create({
       title,
       description,
       category,
+      classCode: classCode ? classCode.trim() : '',
+      isPublished: typeof isPublished === 'boolean' ? isPublished : true,
       teacher: req.user._id,
     });
     res.status(201).json(course);
@@ -72,7 +95,7 @@ export const createCourse = async (req, res, next) => {
   }
 };
 
-// @desc    Cập nhật khóa học (Teacher sở hữu)
+// @desc    Cập nhật khóa học (Teacher sở hữu hoặc Admin)
 // @route   PUT /api/courses/:id
 export const updateCourse = async (req, res, next) => {
   try {
@@ -90,10 +113,11 @@ export const updateCourse = async (req, res, next) => {
       throw new Error('Bạn không có quyền chỉnh sửa khóa học này');
     }
 
-    const { title, description, category, isPublished } = req.body;
-    course.title = title || course.title;
-    course.description = description || course.description;
-    course.category = category || course.category;
+    const { title, description, category, isPublished, classCode } = req.body;
+    if (title !== undefined) course.title = title;
+    if (description !== undefined) course.description = description;
+    if (category !== undefined) course.category = category;
+    if (classCode !== undefined) course.classCode = classCode.trim();
     if (typeof isPublished === 'boolean') course.isPublished = isPublished;
 
     const updated = await course.save();
@@ -122,7 +146,13 @@ export const deleteCourse = async (req, res, next) => {
     }
 
     await course.deleteOne();
-    await Enrollment.deleteMany({ course: req.params.id });
+    await Promise.all([
+      Enrollment.deleteMany({ course: req.params.id }),
+      Assignment.deleteMany({ course: req.params.id }),
+      Quiz.deleteMany({ course: req.params.id }),
+      Announcement.deleteMany({ course: req.params.id }),
+    ]);
+
     res.json({ message: 'Đã xóa khóa học thành công' });
   } catch (error) {
     next(error);

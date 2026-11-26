@@ -35,6 +35,8 @@ export const registerUser = async (req, res, next) => {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
+      avatar: user.avatar || '',
+      bio: user.bio || '',
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -65,6 +67,8 @@ export const loginUser = async (req, res, next) => {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
+      avatar: user.avatar || '',
+      bio: user.bio || '',
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -77,4 +81,66 @@ export const loginUser = async (req, res, next) => {
 // @access  Private
 export const getMe = async (req, res) => {
   res.json(req.user);
+};
+
+// @desc    Cập nhật hồ sơ cá nhân (Họ tên, giới thiệu, ảnh đại diện)
+// @route   PUT /api/auth/profile
+// @access  Private
+export const updateProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      res.status(404);
+      throw new Error('Không tìm thấy người dùng');
+    }
+
+    const { fullName, bio } = req.body;
+    if (fullName !== undefined && fullName.trim()) {
+      user.fullName = fullName.trim();
+    }
+    if (bio !== undefined) {
+      user.bio = bio;
+    }
+    if (req.file) {
+      user.avatar = req.file.path;
+    }
+
+    const updated = await user.save();
+    res.json({
+      _id: updated._id,
+      fullName: updated.fullName,
+      email: updated.email,
+      role: updated.role,
+      avatar: updated.avatar || '',
+      bio: updated.bio || '',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Đổi mật khẩu tài khoản hiện tại
+// @route   PUT /api/auth/password
+// @access  Private
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || newPassword.length < 6) {
+      res.status(400);
+      throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự');
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user || !(await user.matchPassword(currentPassword))) {
+      res.status(400);
+      throw new Error('Mật khẩu hiện tại không chính xác');
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({ message: 'Đổi mật khẩu thành công' });
+  } catch (error) {
+    next(error);
+  }
 };

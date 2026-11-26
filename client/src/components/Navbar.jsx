@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import axiosClient from '../api/axiosClient';
 import {
   BookOpen,
   LogOut,
@@ -8,6 +9,8 @@ import {
   Menu,
   X,
   GraduationCap,
+  Bell,
+  UserCog,
 } from 'lucide-react';
 
 const ROLE_LABELS = {
@@ -21,10 +24,27 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [upcoming, setUpcoming] = useState([]);
+
+  useEffect(() => {
+    if (user?.role === 'student') {
+      axiosClient
+        .get('/assignments/my-upcoming')
+        .then(({ data }) => {
+          const pending = data.filter((a) => !a.submitted);
+          setUpcoming(pending);
+        })
+        .catch(() => setUpcoming([]));
+    } else {
+      setUpcoming([]);
+    }
+  }, [user, location.pathname]);
 
   const handleLogout = () => {
     logout();
     setMobileOpen(false);
+    setBellOpen(false);
     navigate('/login');
   };
 
@@ -93,14 +113,86 @@ export default function Navbar() {
                 <span>Dashboard</span>
               </Link>
 
+              {/* Chuông nhắc hạn bài tập cho Sinh viên */}
+              {user.role === 'student' && (
+                <div className="relative">
+                  <button
+                    onClick={() => setBellOpen(!bellOpen)}
+                    className="relative p-2 rounded-xl text-slate-600 hover:bg-slate-100 cursor-pointer transition"
+                    aria-label="Thông báo bài tập"
+                  >
+                    <Bell className="w-5 h-5" />
+                    {upcoming.length > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {upcoming.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {bellOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl border border-slate-200 shadow-xl p-3 z-50">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                        <span className="text-xs font-bold text-slate-800">
+                          Bài tập chưa nộp ({upcoming.length})
+                        </span>
+                        <button
+                          onClick={() => setBellOpen(false)}
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {upcoming.length === 0 ? (
+                        <p className="text-xs text-slate-500 py-4 text-center">
+                          Tuyệt vời! Bạn đã hoàn thành tất cả bài tập.
+                        </p>
+                      ) : (
+                        <div className="max-h-64 overflow-y-auto space-y-1.5">
+                          {upcoming.map((item) => (
+                            <Link
+                              key={item._id}
+                              to={`/courses/${item.course?._id}`}
+                              onClick={() => setBellOpen(false)}
+                              className="block p-2.5 rounded-xl hover:bg-indigo-50/70 transition"
+                            >
+                              <p className="text-xs font-bold text-slate-800 line-clamp-1">
+                                {item.title}
+                              </p>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {item.course?.title} • Hạn:{' '}
+                                {new Date(item.dueDate).toLocaleDateString('vi-VN')}
+                              </p>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="h-6 w-px bg-slate-200 mx-1" />
 
-              <div className="flex items-center gap-2.5 pl-1">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                  {user.fullName?.charAt(0).toUpperCase() || 'U'}
-                </div>
+              <Link
+                to="/profile"
+                className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition ${
+                  isActive('/profile') ? 'bg-indigo-50' : 'hover:bg-slate-100'
+                }`}
+                title="Hồ sơ cá nhân"
+              >
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.fullName}
+                    className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                    {user.fullName?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                )}
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold text-slate-800 max-w-[150px] truncate">
+                  <p className="text-sm font-semibold text-slate-800 max-w-[140px] truncate">
                     {user.fullName}
                   </p>
                   <span
@@ -109,12 +201,12 @@ export default function Navbar() {
                     {roleMeta.label}
                   </span>
                 </div>
-              </div>
+              </Link>
 
               <button
                 onClick={handleLogout}
                 title="Đăng xuất"
-                className="ml-2 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 transition cursor-pointer"
+                className="ml-1 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 transition cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Thoát</span>
@@ -175,11 +267,28 @@ export default function Navbar() {
                 <span>Dashboard ({roleMeta.label})</span>
               </Link>
 
+              <Link
+                to="/profile"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                <UserCog className="w-4 h-4 text-indigo-600" />
+                <span>Hồ sơ cá nhân</span>
+              </Link>
+
               <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
-                    {user.fullName?.charAt(0).toUpperCase() || 'U'}
-                  </div>
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.fullName}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
+                      {user.fullName?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-semibold text-slate-800">{user.fullName}</p>
                     <p className="text-xs text-slate-500">{roleMeta.label}</p>

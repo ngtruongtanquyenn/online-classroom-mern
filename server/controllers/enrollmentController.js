@@ -7,11 +7,25 @@ import Assignment from '../models/Assignment.js';
 export const enrollCourse = async (req, res, next) => {
   try {
     const { courseId } = req.params;
+    const { classCode } = req.body || {};
 
     const course = await Course.findById(courseId);
     if (!course) {
       res.status(404);
       throw new Error('Khóa học không tồn tại');
+    }
+
+    if (!course.isPublished) {
+      res.status(403);
+      throw new Error('Khóa học hiện đang tạm đóng ghi danh');
+    }
+
+    if (course.classCode && course.classCode.trim()) {
+      const provided = (classCode || '').trim().toLowerCase();
+      if (provided !== course.classCode.trim().toLowerCase()) {
+        res.status(403);
+        throw new Error('Mã tham gia lớp học không chính xác');
+      }
     }
 
     const existing = await Enrollment.findOne({
@@ -41,11 +55,25 @@ export const getMyEnrollments = async (req, res, next) => {
     const enrollments = await Enrollment.find({ student: req.user._id })
       .populate({
         path: 'course',
-        populate: { path: 'teacher', select: 'fullName email' },
+        populate: { path: 'teacher', select: 'fullName email avatar' },
       })
       .sort('-createdAt');
 
     res.json(enrollments);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Lấy thông tin ghi danh của sinh viên trong 1 khóa học
+// @route   GET /api/enrollments/course/:courseId/my-enrollment
+export const getMyCourseEnrollment = async (req, res, next) => {
+  try {
+    const enrollment = await Enrollment.findOne({
+      student: req.user._id,
+      course: req.params.courseId,
+    });
+    res.json(enrollment);
   } catch (error) {
     next(error);
   }
@@ -69,13 +97,19 @@ export const markMaterialComplete = async (req, res, next) => {
     const course = await Course.findById(courseId);
     const totalMaterials = course.materials.length;
 
-    if (!enrollment.completedMaterials.includes(materialId)) {
+    const alreadyDone = enrollment.completedMaterials.some(
+      (id) => id.toString() === materialId
+    );
+    if (!alreadyDone) {
       enrollment.completedMaterials.push(materialId);
     }
 
     enrollment.progress =
       totalMaterials > 0
-        ? Math.round((enrollment.completedMaterials.length / totalMaterials) * 100)
+        ? Math.min(
+            100,
+            Math.round((enrollment.completedMaterials.length / totalMaterials) * 100)
+          )
         : 100;
 
     await enrollment.save();
@@ -104,7 +138,7 @@ export const getCourseStudents = async (req, res, next) => {
     }
 
     const enrollments = await Enrollment.find({ course: req.params.courseId })
-      .populate('student', 'fullName email createdAt')
+      .populate('student', 'fullName email avatar createdAt')
       .sort('-createdAt');
 
     res.json(enrollments);
@@ -129,7 +163,6 @@ export const removeStudentFromCourse = async (req, res, next) => {
       throw new Error('Không tìm thấy khóa học');
     }
 
-    // Kiểm tra quyền: Chỉ Admin hoặc Giảng viên tạo khóa học mới được xóa
     const isTeacherOwner = course.teacher.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
 
@@ -138,13 +171,11 @@ export const removeStudentFromCourse = async (req, res, next) => {
       throw new Error('Bạn không có quyền xóa học viên khỏi khóa học này');
     }
 
-    // 1. Dọn dẹp luôn bài nộp của học viên này trong các bài tập của khóa học (tránh rác dữ liệu)
     await Assignment.updateMany(
       { course: course._id },
       { $pull: { submissions: { student: enrollment.student } } }
     );
 
-    // 2. Xóa bản ghi ghi danh
     await enrollment.deleteOne();
 
     res.json({ message: 'Đã xóa học viên khỏi khóa học thành công' });

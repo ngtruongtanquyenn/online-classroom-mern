@@ -36,6 +36,11 @@ const courseSchema = new mongoose.Schema(
       required: true,
     },
     materials: [materialSchema], // Danh sách tài liệu học tập
+    classCode: {
+      type: String,
+      trim: true,
+      default: '', // Để trống = khóa học công khai; có mã = yêu cầu nhập mã khi ghi danh
+    },
     isPublished: {
       type: Boolean,
       default: true,

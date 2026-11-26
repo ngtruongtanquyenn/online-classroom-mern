@@ -9,18 +9,25 @@ import {
   CheckCircle2,
   ArrowRight,
   Compass,
+  CalendarClock,
+  Award,
+  Clock,
 } from 'lucide-react';
 
 export default function StudentDashboard() {
   const [enrollments, setEnrollments] = useState([]);
+  const [upcoming, setUpcoming] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
-    axiosClient
-      .get('/enrollments/my-enrollments')
-      .then(({ data }) => {
-        setEnrollments(data.filter((item) => item.course));
+    Promise.all([
+      axiosClient.get('/enrollments/my-enrollments'),
+      axiosClient.get('/assignments/my-upcoming'),
+    ])
+      .then(([enrollRes, assignRes]) => {
+        setEnrollments(enrollRes.data.filter((item) => item.course));
+        setUpcoming(assignRes.data);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -32,6 +39,9 @@ export default function StudentDashboard() {
           enrollments.reduce((acc, e) => acc + (e.progress || 0), 0) / enrollments.length
         )
       : 0;
+
+  const pendingAssignments = upcoming.filter((a) => !a.submitted);
+  const gradedAssignments = upcoming.filter((a) => a.grade !== null);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -45,7 +55,7 @@ export default function StudentDashboard() {
             Xin chào, {user?.fullName} 👋
           </h1>
           <p className="text-indigo-100 text-sm mt-1.5">
-            Theo dõi các lớp học đã ghi danh và tiến trình hoàn thành học liệu của bạn.
+            Theo dõi các lớp học đã ghi danh, hạn nộp bài tập và điểm số của bạn.
           </p>
         </div>
         <Link
@@ -58,7 +68,7 @@ export default function StudentDashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
             <BookOpen className="w-6 h-6" />
@@ -80,6 +90,18 @@ export default function StudentDashboard() {
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+            <Clock className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Bài tập chưa nộp</p>
+            <p className="text-2xl font-extrabold text-slate-900">
+              {pendingAssignments.length}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-6 h-6" />
           </div>
@@ -90,6 +112,95 @@ export default function StudentDashboard() {
         </div>
       </div>
 
+      {/* Bài tập sắp đến hạn & Kết quả chấm điểm */}
+      {upcoming.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Bài tập cần làm */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-slate-900">
+                <CalendarClock className="w-5 h-5 text-rose-600" />
+                <span>Bài tập sắp đến hạn ({pendingAssignments.length})</span>
+              </div>
+            </div>
+
+            {pendingAssignments.length === 0 ? (
+              <p className="text-sm text-emerald-600 bg-emerald-50 p-4 rounded-xl">
+                Bạn đã hoàn thành tất cả bài tập được giao!
+              </p>
+            ) : (
+              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                {pendingAssignments.map((a) => {
+                  const isOverdue = new Date(a.dueDate) < new Date();
+                  return (
+                    <Link
+                      key={a._id}
+                      to={`/courses/${a.course?._id}`}
+                      className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-indigo-50/60 hover:border-indigo-200 transition"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">
+                          {a.title}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {a.course?.title}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${
+                          isOverdue
+                            ? 'bg-rose-100 text-rose-700'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {isOverdue ? 'Quá hạn: ' : 'Hạn: '}
+                        {new Date(a.dueDate).toLocaleDateString('vi-VN')}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Điểm bài tập đã chấm */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 font-bold text-slate-900">
+              <Award className="w-5 h-5 text-amber-500" />
+              <span>Bảng điểm bài tập ({gradedAssignments.length})</span>
+            </div>
+
+            {gradedAssignments.length === 0 ? (
+              <p className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl">
+                Chưa có bài tập nào được giảng viên chấm điểm.
+              </p>
+            ) : (
+              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                {gradedAssignments.map((a) => (
+                  <Link
+                    key={a._id}
+                    to={`/courses/${a.course?._id}`}
+                    className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-emerald-50/50 transition"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">
+                        {a.title}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {a.course?.title}
+                      </p>
+                    </div>
+                    <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 shrink-0">
+                      {a.grade}/10
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Course List */}
       <div>
         <h2 className="text-xl font-bold text-slate-900 mb-5">
@@ -99,7 +210,10 @@ export default function StudentDashboard() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 animate-pulse space-y-4">
+              <div
+                key={i}
+                className="bg-white p-6 rounded-2xl border border-slate-200 animate-pulse space-y-4"
+              >
                 <div className="h-5 bg-slate-200 rounded w-3/4" />
                 <div className="h-4 bg-slate-100 rounded w-1/2" />
                 <div className="h-2.5 bg-slate-200 rounded-full w-full" />
@@ -161,7 +275,6 @@ export default function StudentDashboard() {
                   </div>
 
                   <div>
-                    {/* Thanh tiến trình */}
                     <div className="mb-5">
                       <div className="flex justify-between text-xs font-semibold text-slate-600 mb-1.5">
                         <span>Tiến độ hoàn thành</span>

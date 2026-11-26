@@ -16,6 +16,7 @@ const submissionSchema = new mongoose.Schema(
       default: null,
     },
     feedback: { type: String, default: '' },
+    isLate: { type: Boolean, default: false },
     submittedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }

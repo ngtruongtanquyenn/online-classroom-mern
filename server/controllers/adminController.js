@@ -1,18 +1,50 @@
 import User from '../models/User.js';
 import Course from '../models/Course.js';
 import Enrollment from '../models/Enrollment.js';
+import Assignment from '../models/Assignment.js';
+import Quiz from '../models/Quiz.js';
+import Announcement from '../models/Announcement.js';
 
 // @desc    Thống kê tổng quan cho Dashboard Admin
 // @route   GET /api/admin/stats
 export const getSystemStats = async (req, res, next) => {
   try {
-    const [totalUsers, totalCourses, totalEnrollments] = await Promise.all([
+    const [
+      totalUsers,
+      totalCourses,
+      totalEnrollments,
+      totalAssignments,
+      students,
+      teachers,
+      admins,
+      categoryAgg,
+    ] = await Promise.all([
       User.countDocuments(),
       Course.countDocuments(),
       Enrollment.countDocuments(),
+      Assignment.countDocuments(),
+      User.countDocuments({ role: 'student' }),
+      User.countDocuments({ role: 'teacher' }),
+      User.countDocuments({ role: 'admin' }),
+      Course.aggregate([
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
     ]);
 
-    res.json({ totalUsers, totalCourses, totalEnrollments });
+    const categoryCounts = categoryAgg.map((c) => ({
+      category: c._id || 'Khác',
+      count: c.count,
+    }));
+
+    res.json({
+      totalUsers,
+      totalCourses,
+      totalEnrollments,
+      totalAssignments,
+      roleCounts: { students, teachers, admins },
+      categoryCounts,
+    });
   } catch (error) {
     next(error);
   }
@@ -33,7 +65,7 @@ export const getAllUsers = async (req, res, next) => {
 // @route   PUT /api/admin/users/:id/toggle-status
 export const toggleUserStatus = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).select('-password');
     if (!user) {
       res.status(404);
       throw new Error('Không tìm thấy người dùng');
@@ -69,7 +101,7 @@ export const getAllCoursesAdmin = async (req, res, next) => {
   }
 };
 
-// @desc    Xóa người dùng
+// @desc    Xóa người dùng và dọn dẹp dữ liệu liên quan
 // @route   DELETE /api/admin/users/:id
 // @access  Private/Admin
 export const deleteUser = async (req, res, next) => {
@@ -85,11 +117,31 @@ export const deleteUser = async (req, res, next) => {
       throw new Error('Không thể xóa tài khoản Quản trị viên');
     }
 
-    await User.findByIdAndDelete(req.params.id);
-    // (Tùy chọn) Xóa luôn các khóa học nếu người dùng là giảng viên:
-    // await Course.deleteMany({ teacher: req.params.id });
+    const teacherCourses = await Course.find({ teacher: req.params.id }).select('_id');
+    const teacherCourseIds = teacherCourses.map((c) => c._id);
 
-    res.json({ message: 'Đã xóa người dùng thành công' });
+    await Promise.all([
+      Enrollment.deleteMany({
+        $or: [
+          { student: req.params.id },
+          { course: { $in: teacherCourseIds } },
+        ],
+      }),
+      Assignment.deleteMany({ course: { $in: teacherCourseIds } }),
+      Assignment.updateMany({}, { $pull: { submissions: { student: req.params.id } } }),
+      Quiz.deleteMany({ course: { $in: teacherCourseIds } }),
+      Quiz.updateMany({}, { $pull: { attempts: { student: req.params.id } } }),
+      Announcement.deleteMany({
+        $or: [
+          { course: { $in: teacherCourseIds } },
+          { author: req.params.id },
+        ],
+      }),
+      Course.deleteMany({ teacher: req.params.id }),
+      User.findByIdAndDelete(req.params.id),
+    ]);
+
+    res.json({ message: 'Đã xóa người dùng và dữ liệu liên quan thành công' });
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,6 @@
 import Assignment from '../models/Assignment.js';
 import Course from '../models/Course.js';
+import Enrollment from '../models/Enrollment.js';
 
 // @desc    Giảng viên tạo bài tập mới trong khóa học
 // @route   POST /api/assignments
@@ -13,7 +14,10 @@ export const createAssignment = async (req, res, next) => {
       throw new Error('Không tìm thấy khóa học');
     }
 
-    if (course.teacher.toString() !== req.user._id.toString()) {
+    if (
+      course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
       res.status(403);
       throw new Error('Bạn không phải giảng viên của khóa học này');
     }
@@ -36,10 +40,53 @@ export const createAssignment = async (req, res, next) => {
 export const getAssignmentsByCourse = async (req, res, next) => {
   try {
     const assignments = await Assignment.find({ course: req.params.courseId })
-      .populate('submissions.student', 'fullName email')
+      .populate('submissions.student', 'fullName email avatar')
       .sort('-createdAt');
 
+    if (req.user.role === 'student') {
+      const filtered = assignments.map((assign) => {
+        const obj = assign.toObject();
+        obj.submissions = (obj.submissions || []).filter(
+          (sub) => sub.student?._id?.toString() === req.user._id.toString()
+        );
+        return obj;
+      });
+      return res.json(filtered);
+    }
+
     res.json(assignments);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Lấy danh sách bài tập từ các khóa học sinh viên đã ghi danh
+// @route   GET /api/assignments/my-upcoming
+export const getMyUpcomingAssignments = async (req, res, next) => {
+  try {
+    const enrollments = await Enrollment.find({ student: req.user._id }).select('course');
+    const courseIds = enrollments.map((e) => e.course);
+
+    const assignments = await Assignment.find({ course: { $in: courseIds } })
+      .populate('course', 'title category')
+      .sort('dueDate');
+
+    const result = assignments.map((assign) => {
+      const mySub = assign.submissions.find(
+        (sub) => sub.student?.toString() === req.user._id.toString()
+      );
+      return {
+        _id: assign._id,
+        title: assign.title,
+        dueDate: assign.dueDate,
+        course: assign.course,
+        submitted: Boolean(mySub),
+        grade: mySub ? mySub.grade : null,
+        isLate: mySub ? mySub.isLate : false,
+      };
+    });
+
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -55,6 +102,15 @@ export const submitAssignment = async (req, res, next) => {
       throw new Error('Không tìm thấy bài tập');
     }
 
+    const enrolled = await Enrollment.findOne({
+      student: req.user._id,
+      course: assignment.course,
+    });
+    if (!enrolled) {
+      res.status(403);
+      throw new Error('Bạn cần ghi danh vào khóa học trước khi nộp bài');
+    }
+
     const { textAnswer } = req.body;
     const fileUrl = req.file ? req.file.path : undefined;
 
@@ -63,6 +119,7 @@ export const submitAssignment = async (req, res, next) => {
       throw new Error('Vui lòng nhập nội dung hoặc đính kèm tệp bài làm');
     }
 
+    const isLate = new Date() > new Date(assignment.dueDate);
     const existingIndex = assignment.submissions.findIndex(
       (sub) => sub.student.toString() === req.user._id.toString()
     );
@@ -70,12 +127,14 @@ export const submitAssignment = async (req, res, next) => {
     if (existingIndex !== -1) {
       assignment.submissions[existingIndex].textAnswer = textAnswer;
       if (fileUrl) assignment.submissions[existingIndex].fileUrl = fileUrl;
+      assignment.submissions[existingIndex].isLate = isLate;
       assignment.submissions[existingIndex].submittedAt = Date.now();
     } else {
       assignment.submissions.push({
         student: req.user._id,
         textAnswer,
         fileUrl,
+        isLate,
       });
     }
 
@@ -98,7 +157,10 @@ export const gradeSubmission = async (req, res, next) => {
       throw new Error('Không tìm thấy bài tập');
     }
 
-    if (assignment.course.teacher.toString() !== req.user._id.toString()) {
+    if (
+      assignment.course.teacher.toString() !== req.user._id.toString() &&
+      req.user.role !== 'admin'
+    ) {
       res.status(403);
       throw new Error('Không có quyền chấm điểm bài tập này');
     }

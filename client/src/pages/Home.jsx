@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
   Search,
   BookOpen,
@@ -11,6 +12,9 @@ import {
   ArrowRight,
   CheckCircle2,
   X,
+  Lock,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -29,13 +33,23 @@ const COVER_GRADIENTS = [
   'from-sky-600 via-indigo-600 to-violet-600',
 ];
 
+const PAGE_SIZE = 6;
+
 export default function Home() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [enrolledIds, setEnrolledIds] = useState([]);
+  const [page, setPage] = useState(1);
+
+  // Modal nhập mã tham gia lớp (nếu khóa học đặt classCode)
+  const [codeModalCourse, setCodeModalCourse] = useState(null);
+  const [classCodeInput, setClassCodeInput] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+
   const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const fetchCourses = async (searchKey = keyword, cat = selectedCategory) => {
@@ -46,6 +60,7 @@ export default function Home() {
         `/courses?keyword=${encodeURIComponent(searchKey)}&category=${encodeURIComponent(categoryParam)}`
       );
       setCourses(data);
+      setPage(1);
     } finally {
       setLoading(false);
     }
@@ -72,16 +87,33 @@ export default function Home() {
     fetchCourses('', selectedCategory);
   };
 
-  const handleEnroll = async (courseId) => {
-    if (!user) return navigate('/login');
+  const submitEnroll = async (courseId, classCode = '') => {
+    setEnrolling(true);
     try {
-      await axiosClient.post(`/enrollments/${courseId}`);
-      alert('Ghi danh khóa học thành công!');
-      setEnrolledIds([...enrolledIds, courseId]);
+      await axiosClient.post(`/enrollments/${courseId}`, { classCode });
+      toast.success('Ghi danh khóa học thành công!');
+      setEnrolledIds((prev) => [...prev, courseId]);
+      setCodeModalCourse(null);
+      setClassCodeInput('');
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi ghi danh');
+      toast.error(err.response?.data?.message || 'Lỗi ghi danh khóa học');
+    } finally {
+      setEnrolling(false);
     }
   };
+
+  const handleEnrollClick = (course) => {
+    if (!user) return navigate('/login');
+    if (course.hasClassCode) {
+      setCodeModalCourse(course);
+      setClassCodeInput('');
+      return;
+    }
+    submitEnroll(course._id);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(courses.length / PAGE_SIZE));
+  const paginatedCourses = courses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
@@ -110,7 +142,7 @@ export default function Home() {
           </h1>
 
           <p className="text-indigo-100/90 max-w-2xl mx-auto text-sm sm:text-base md:text-lg leading-relaxed">
-            Tham gia các lớp học trực tuyến chất lượng cao, truy cập học liệu đa dạng, nộp bài tập và theo dõi tiến độ theo thời gian thực.
+            Tham gia các lớp học trực tuyến chất lượng cao, truy cập học liệu đa dạng, làm bài kiểm tra trắc nghiệm và theo dõi tiến độ theo thời gian thực.
           </p>
 
           {/* Thanh tìm kiếm */}
@@ -218,90 +250,204 @@ export default function Home() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
-            {courses.map((course, idx) => {
-              const isEnrolled = enrolledIds.includes(course._id);
-              const isOwner = user?._id === course.teacher?._id;
-              const gradient = COVER_GRADIENTS[idx % COVER_GRADIENTS.length];
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+              {paginatedCourses.map((course, idx) => {
+                const isEnrolled = enrolledIds.includes(course._id);
+                const isOwner = user?._id === course.teacher?._id;
+                const gradient = COVER_GRADIENTS[idx % COVER_GRADIENTS.length];
 
-              return (
-                <article
-                  key={course._id}
-                  className="group bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:border-indigo-200 hover:-translate-y-1 transition-all duration-200"
-                >
-                  <div>
-                    {/* Ảnh bìa Gradient */}
-                    <div
-                      className={`h-36 bg-gradient-to-br ${gradient} p-5 flex flex-col justify-between text-white relative overflow-hidden`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="bg-black/20 backdrop-blur-xs border border-white/15 text-xs font-semibold px-3 py-1 rounded-full">
-                          {course.category}
-                        </span>
-                        {isEnrolled && (
-                          <span className="inline-flex items-center gap-1 bg-emerald-500/90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full shadow-xs">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>Đã ghi danh</span>
+                return (
+                  <article
+                    key={course._id}
+                    className="group bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:border-indigo-200 hover:-translate-y-1 transition-all duration-200"
+                  >
+                    <div>
+                      <div
+                        className={`h-36 bg-gradient-to-br ${gradient} p-5 flex flex-col justify-between text-white relative overflow-hidden`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="bg-black/20 backdrop-blur-xs border border-white/15 text-xs font-semibold px-3 py-1 rounded-full">
+                            {course.category}
                           </span>
+                          {isEnrolled ? (
+                            <span className="inline-flex items-center gap-1 bg-emerald-500/90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full shadow-xs">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Đã ghi danh</span>
+                            </span>
+                          ) : (
+                            course.hasClassCode && (
+                              <span className="inline-flex items-center gap-1 bg-amber-500/90 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full shadow-xs">
+                                <Lock className="w-3 h-3" />
+                                <span>Cần mã lớp</span>
+                              </span>
+                            )
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium">
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>{course.materials?.length || 0} bài học & tài liệu</span>
+                        </div>
+                      </div>
+
+                      <div className="p-6">
+                        <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-1 group-hover:text-indigo-700 transition-colors">
+                          {course.title}
+                        </h3>
+                        <p className="text-slate-600 text-sm line-clamp-3 leading-relaxed">
+                          {course.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="px-6 pb-6">
+                      <div className="flex items-center gap-3 text-sm text-slate-600 mb-5 pt-4 border-t border-slate-100">
+                        {course.teacher?.avatar ? (
+                          <img
+                            src={course.teacher.avatar}
+                            alt={course.teacher.fullName}
+                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
+                            {course.teacher?.fullName?.charAt(0).toUpperCase() || 'G'}
+                          </div>
                         )}
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
+                            Giảng viên
+                          </p>
+                          <p className="font-semibold text-slate-700 truncate">
+                            {course.teacher?.fullName}
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium">
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>{course.materials?.length || 0} bài học & tài liệu</span>
-                      </div>
+                      {isEnrolled || isOwner || user?.role === 'admin' ? (
+                        <button
+                          onClick={() => navigate(`/courses/${course._id}`)}
+                          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-4 rounded-xl font-semibold text-sm transition cursor-pointer shadow-xs"
+                        >
+                          <BookOpen className="w-4 h-4" />
+                          <span>Vào lớp học</span>
+                          <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleEnrollClick(course)}
+                          className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 px-4 rounded-xl font-semibold text-sm transition cursor-pointer shadow-xs"
+                        >
+                          <span>Ghi danh ngay</span>
+                          <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      )}
                     </div>
+                  </article>
+                );
+              })}
+            </div>
 
-                    <div className="p-6">
-                      <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-1 group-hover:text-indigo-700 transition-colors">
-                        {course.title}
-                      </h3>
-                      <p className="text-slate-600 text-sm line-clamp-3 leading-relaxed">
-                        {course.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="px-6 pb-6">
-                    <div className="flex items-center gap-3 text-sm text-slate-600 mb-5 pt-4 border-t border-slate-100">
-                      <div className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
-                        {course.teacher?.fullName?.charAt(0).toUpperCase() || 'G'}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
-                          Giảng viên
-                        </p>
-                        <p className="font-semibold text-slate-700 truncate">
-                          {course.teacher?.fullName}
-                        </p>
-                      </div>
-                    </div>
-
-                    {isEnrolled || isOwner || user?.role === 'admin' ? (
-                      <button
-                        onClick={() => navigate(`/courses/${course._id}`)}
-                        className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-4 rounded-xl font-semibold text-sm transition cursor-pointer shadow-xs"
-                      >
-                        <BookOpen className="w-4 h-4" />
-                        <span>Vào lớp học</span>
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleEnroll(course._id)}
-                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 px-4 rounded-xl font-semibold text-sm transition cursor-pointer shadow-xs"
-                      >
-                        <span>Ghi danh ngay</span>
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-10 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                  aria-label="Trang trước"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-9 h-9 rounded-xl text-sm font-semibold cursor-pointer transition ${
+                      page === p
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                  aria-label="Trang sau"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
+
+      {/* Modal nhập mã tham gia lớp */}
+      {codeModalCourse && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Nhập mã tham gia lớp
+                  </h3>
+                  <p className="text-xs text-slate-500 line-clamp-1">
+                    {codeModalCourse.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCodeModalCourse(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitEnroll(codeModalCourse._id, classCodeInput);
+              }}
+              className="space-y-4"
+            >
+              <input
+                type="text"
+                required
+                autoFocus
+                value={classCodeInput}
+                onChange={(e) => setClassCodeInput(e.target.value)}
+                placeholder="Nhập mã lớp do giảng viên cung cấp..."
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCodeModalCourse(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={enrolling}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold cursor-pointer"
+                >
+                  {enrolling ? 'Đang xác nhận...' : 'Tham gia lớp'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
